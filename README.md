@@ -319,5 +319,9 @@ docker-compose.yml
 
 ## 许可证
 
-尚未添加许可证文件。在公开发布前请确认你希望采用的许可证（例如 MIT 或 Apache-2.0），
-否则默认保留全部权利，他人无法合法复用。
+本项目采用 [MIT License](LICENSE)。你可以自由使用、修改、分发，包括商业用途，
+只需保留原始版权声明。
+
+```
+Copyright (c) 2026 youshouldunderstand
+```
