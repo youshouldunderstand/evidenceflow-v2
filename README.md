@@ -12,6 +12,62 @@ Claim → Evidence ID → Source ID → Source Snapshot → Original Quote
 最终引用 URL 不来自模型输出，只由持久化的 `SourceRecord` 渲染。模型可以写错结论，但
 不能凭空造出一条引用链。
 
+## 30 秒看到效果
+
+不需要任何 API Key，不需要联网，一条命令跑完整个链路（规划 → 检索 → 写作 → 引文校验 →
+审核 → 指标 → 落盘 → SSE 回放）：
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
+Set-Location backend
+..\.venv\Scripts\python.exe -m app.demo_nocreds
+```
+
+实际输出（确定性 Fake Provider，零外部调用）：
+
+```text
+/health            : {'status': 'ok', 'provider': 'fake+fake',
+                      'provider_notice': 'FAKE PROVIDERS: ...'}
+POST /api/research : TASK_ab6e48f1cc63
+终态 status        : COMPLETED
+报告标题           : EvidenceFlow Phase 2 Fake Provider Report
+质量指标           : overall_score=100.0 passed=True
+                     citation_coverage=1.0 citation_precision=1.0
+Claim → Evidence → Source 引用链（URL 由 SourceRecord 渲染）
+  C001 → E_bc36f63e4b94 → S_5f0c23f440d8
+    引文: EvidenceFlow requires every factual report claim to reference a
+          validated evidence card containing an original source quote.
+    来源: EvidenceFlow Fake Provider Documentation — https://example.invalid/...
+SSE 事件帧         : 36 帧（回放正常）
+```
+
+**这证明的是工程链路可运行，不是互联网调研质量**——Provider 是 Fake，报告内容不可作为
+事实结论。要得到真实调研结果，见下方[配置真实 Provider](#配置真实-provider)。
+
+## 界面
+
+三页 React 前端。以下截图均来自上面的 Fake 演示，所以报告内容是演示数据。
+
+### 新建调研
+
+![新建调研](docs/images/ui-new-research.png)
+
+### 执行时间线
+
+模型调用、工具调用、预算计费 Token、成本、延迟与逐条事件；右侧面板解释执行语义、研究
+覆盖与停止原因。断线重连按单调 sequence 回放缺失事件。
+
+![执行时间线](docs/images/ui-execution.png)
+
+### 报告与证据链
+
+左侧是结论、建议与风险；右侧是程序生成的 `Claim → Evidence → Source` 链：逐字引文、
+「原文匹配通过」的比对结果、快照上下文与来源链接。**最终 URL 只由持久化 SourceRecord
+渲染，不来自模型输出。**
+
+![报告证据链](docs/images/ui-report.png)
+
 ## 它解决什么问题
 
 用大模型做技术调研，最常见的失败不是"写不出来"，而是**写得很像真的**：
@@ -57,7 +113,7 @@ flowchart LR
 
 这不是为了增加角色数量，而是让权限边界可以被代码检查。
 
-## 已实现
+## 能力
 
 **证据链与校验**
 
@@ -85,9 +141,9 @@ flowchart LR
 - React + TypeScript 三页：新建调研、执行时间线、报告证据链。
 - 后端/前端 Dockerfile、Nginx SSE 代理与 docker-compose。
 
-## 未实现 / 边界
+## 已知限制
 
-明确写出来，避免误读：
+公开说明，避免过度解读：
 
 - **默认是 Fake Provider。** 项目提供 Tavily、Google 两种真实 Search Provider 与实时网页读取，但默认使用带明确标记的确定性 Fake。只有配置有效凭据并选择对应 `SEARCH_PROVIDER` 后，结果才能称为真实联网调研。
 - **本地文档搜索**只实现了最小接口并接入 Researcher 工具层，前端仅预留文件选择 UI，尚未成为正式检索入口。
@@ -124,7 +180,42 @@ Set-Location backend
 >
 > 返回里的 `provider` 应为 `glm+tavily`（或你配置的组合），`provider_notice` 会说明模型与搜索来源。如果看到 `fake+fake` 或 `FAKE PROVIDERS`，说明 `.env` 没被读到，此时提交问题只会得到固定演示数据。
 
-#### 真实 GLM 模型
+### 2. 前端
+
+另开一个终端：
+
+```powershell
+Set-Location frontend
+npm.cmd install
+npm.cmd run dev
+```
+
+打开 `http://127.0.0.1:5173`。Vite 会把 `/api` 和 `/health` 代理到 `http://127.0.0.1:8000`。
+
+生产构建与类型检查：
+
+```powershell
+npm.cmd run typecheck
+npm.cmd run build
+```
+
+### 3. Docker Compose
+
+确认 `backend/.env` 已配置，然后：
+
+```powershell
+docker compose up --build
+```
+
+- Web：`http://127.0.0.1:3000`
+- API/OpenAPI：`http://127.0.0.1:8000/docs`
+- 数据：Docker named volume `evidenceflow_data`
+
+`docker compose down -v` 会删除该卷（含业务数据库与 Checkpoint），除非明确想清空数据，否则不要加 `-v`。
+
+## 配置真实 Provider
+
+### 真实 GLM 模型
 
 ```env
 LLM_PROVIDER=glm
@@ -143,7 +234,7 @@ OPENAI_MODEL=glm-5.2
 
 **只配置 `LLM_PROVIDER=glm` 不够**：正文里的证据必须来自真实抓取的网页快照，所以还要配真实搜索 Provider，否则搜索仍走 Fake、结论不可用于调研。只有模型和搜索**都是**真实的，结果才能称为真实联网调研。
 
-#### 搜索 Provider 1：Tavily（推荐）
+### 搜索 Provider 1：Tavily（推荐）
 
 Tavily 免费账户每月提供 1,000 credits，无需信用卡。基础搜索每次消耗 1 credit。
 
@@ -166,7 +257,7 @@ WORKFLOW_MODEL_OUTPUT_RESERVE_TOKENS=8192
 
 多轮工具选择和每页证据提取都会消耗模型调用预算，真实任务建议从上面这份 14 次调用、200,000 Token 的配置开始，并按任务规模调整。
 
-#### 搜索 Provider 2：Google Custom Search（已有账号备选）
+### 搜索 Provider 2：Google Custom Search（已有账号备选）
 
 ```env
 SEARCH_PROVIDER=google
@@ -179,52 +270,6 @@ GOOGLE_SEARCH_LANGUAGE=
 `GOOGLE_SEARCH_LANGUAGE` 可留空；只希望优先中文时可填 `lang_zh-CN`。程序仅把 Google 结果作为候选 URL，Evidence 必须来自随后实际抓取并持久化的网页快照。
 
 重要限制：Google 官方已停止向新客户开放 Custom Search JSON API，已有客户可使用到 2027-01-01。若你没有历史可用账号和 API，代码接入仍然完整，但无法仅靠新建 Key 获得该服务。官方说明见 [Custom Search JSON API Overview](https://developers.google.com/custom-search/v1/overview)。
-
-### 2. 前端
-
-另开一个终端：
-
-```powershell
-Set-Location frontend
-npm.cmd install
-npm.cmd run dev
-```
-
-打开 `http://127.0.0.1:5173`。Vite 会把 `/api` 和 `/health` 代理到 `http://127.0.0.1:8000`。
-
-生产构建与类型检查：
-
-```powershell
-npm.cmd run typecheck
-npm.cmd run build
-```
-
-### 3. 零凭据的端到端演示
-
-不需要任何 API Key，用确定性 Fake Provider 在一个进程里跑完整链路（规划 → 研究 → 写作 →
-引文校验 → 审核 → 指标 → 落盘 → SSE 回放）：
-
-```powershell
-Set-Location backend
-..\.venv\Scripts\python.exe -m app.demo_nocreds
-```
-
-它会打印 `/health`、任务终态、质量指标、`Claim → Evidence → Source` 引用链与 SSE 帧数。
-**这证明的是工程链路可运行，不是互联网调研质量**——Provider 是 Fake，报告内容不可作为事实结论。
-
-### 4. Docker Compose
-
-确认 `backend/.env` 已配置，然后：
-
-```powershell
-docker compose up --build
-```
-
-- Web：`http://127.0.0.1:3000`
-- API/OpenAPI：`http://127.0.0.1:8000/docs`
-- 数据：Docker named volume `evidenceflow_data`
-
-`docker compose down -v` 会删除该卷（含业务数据库与 Checkpoint），除非明确想清空数据，否则不要加 `-v`。
 
 ## API
 
@@ -303,6 +348,7 @@ frontend/
 docs/
   API.md           接口与 SSE 语义
   DEMO_GUIDE.md    操作演示指南
+  images/          README 界面截图
 docker-compose.yml
 ```
 
