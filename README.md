@@ -288,44 +288,6 @@ GOOGLE_SEARCH_LANGUAGE=
 
 完整请求、响应和 SSE 说明见 [API 文档](docs/API.md)，操作演示见 [Demo Guide](docs/DEMO_GUIDE.md)。
 
-## 关键设计问题
-
-### 为什么不是普通 RAG？
-
-普通 RAG 常见路径是 `Retrieve → Stuff Context → Generate`。EvidenceFlow 保存检索记录、来源现场和逐字 Quote，并在生成前后分别验证 Evidence 与 Citation，最终引用 URL 只能由持久化 SourceRecord 渲染。
-
-### 如何处理模型幻觉？
-
-模型输出先过 Pydantic；Quote、URL、ID、offset 和引用关系由普通 Python 验证；Reviewer 做语义支持判断；修订最多一次；Budget 在调用前硬拦截。证据不足时系统必须显式保留不确定性，而不是补写模型记忆。
-
-### Reviewer 自己也可能幻觉怎么办？
-
-Reviewer 不能输出 `passed` 和 `overall_score`。程序要求它完整覆盖 Claim、Claim-Evidence Pair 和 Requirement，并拒绝未知/遗漏 ID；最终指标和通过判定由确定性代码计算。
-
-**它的能力边界要说清楚**：Reviewer 与 Manager 不共享上下文，但**使用同一个模型**，因此误差是相关的。它结构上只能回答"结论是否内部自洽"，不能回答"结论是否为真"。
-
-### Reviewer 能看见哪些证据？
-
-被 Claim 引用的证据，**外加数量可控时的未引用证据**（`ReviewerAgent(max_uncited_evidence=…)`，默认 10）。给出未引用证据是为了让 Reviewer 能发现**选择性引用**——只引支持自己的那半边。超过阈值则退回只给被引用证据，避免审核上下文膨胀。`REVIEW_SCOPE_JSON` 用 `cited_evidence_ids` / `uncited_evidence_ids` 显式区分，未引用证据不会被当成"漏引用"错误。
-
-### 发现冲突证据会怎样？
-
-Reviewer 报告的结构化冲突会写入 `ResearchProgress.conflicts`。**存在未消解冲突时任务不判为 `COMPLETED`**，而是 `COMPLETED_WITH_WARNINGS`，并在 `unverified_notice` 中列出涉及的 `question_id`——对应"保留冲突或缩小结论，不能选择性隐藏"。
-
-### 报告正文里出现 URL 会让整个任务失败吗？
-
-不会。分三层处理：
-
-1. **提示词不再矛盾**：版本比对改用 `evidence_id` + 来源标题，并明确禁止复制任何链接。
-2. **确定性剔除**：交付前移除报告所有字段中的链接，并发出 `REPORT_URLS_REDACTED` 事件（不静默）。最终引用 URL 只由持久化 `SourceRecord` 渲染，所以剔除不损失内容。
-3. **可修复 vs 致命分级**：报告侧问题允许一次有界定向修复；证据链损坏仍是致命失败，防止悬空引用进入报告 API。
-
-真正确认失败的校验会通过 `REPORT_VALIDATION_FAILED` 事件保存被拒草稿与问题清单，便于定位。
-
-### 如何处理错误？
-
-系统区分 Rate Limit、Network、Timeout、Parse、Schema、不可恢复 Provider Error 和 Budget Error。只有可恢复错误有限重试；所有尝试计入预算；Checkpoint 决定从哪里恢复，稳定 ID 与 UPSERT 保证恢复后不重复写业务记录。
-
 ## 项目结构
 
 ```text
@@ -351,17 +313,6 @@ docs/
   images/          README 界面截图
 docker-compose.yml
 ```
-
-## 学习入口
-
-建议按以下顺序阅读：
-
-1. `backend/app/schemas/`：先理解数据合同
-2. `backend/app/validators/`：理解确定性边界
-3. `backend/app/workflow/graph.py`：理解状态机
-4. `backend/app/reliability/runtime.py`：理解 Budget/Retry
-5. `backend/app/services/event_stream.py`：理解 SSE
-6. `frontend/src/`：理解 API/SSE 如何呈现
 
 ## 许可证
 
