@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 本地配置与密钥：绝不提交
+.env
+.env.*
+!.env.example
+
+# 本地数据库与运行产物
+*.db
+*.sqlite
+*.sqlite3
+*.db-wal
+*.db-shm
+
+# Node / 前端
+node_modules/
+dist/
+*.local
+
+# 编辑器与系统
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# 临时目录
+.tmp/
