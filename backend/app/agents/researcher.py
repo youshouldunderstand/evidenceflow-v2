@@ -39,7 +39,7 @@ from app.schemas.evidence import EvidenceCard, SourceRecord
 from app.schemas.progress import ResearchObservation, ResearchProgress
 from app.schemas.research import ResearchPlan, SearchRecord
 from app.services.llm import StructuredLLM, ToolCallingLLM
-from app.tools.web_reader import PageContent, WebReader
+from app.tools.web_reader import WebReader
 from app.tools.web_search import SearchProvider, SearchResult
 from app.tools.url_identity import normalize_resource_url, url_fragment
 from app.validators.evidence_validator import normalize_content, validate_evidence

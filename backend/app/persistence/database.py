@@ -16,7 +16,6 @@ NAMING_CONVENTION = {
     "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
     "pk": "pk_%(table_name)s",
 }
-CURRENT_SCHEMA_VERSION = 8
 
 
 class Base(DeclarativeBase):
@@ -199,133 +198,95 @@ def _backfill_question_evidence(engine: Engine) -> None:
             )
 
 
-def _apply_source_metadata_migration(engine: Engine) -> None:
+def _add_missing_columns(
+    engine: Engine, table: str, additions: dict[str, str]
+) -> None:
+    """SQLite 增量迁移的统一实现：只补齐缺失列，已存在的列不动。
+
+    ``additions`` 的值是完整的列定义（如 ``VARCHAR(128)`` 或
+    ``JSON NOT NULL DEFAULT '[]'``），直接拼进 ALTER TABLE。
+    """
+
     if engine.dialect.name != "sqlite":
         return
-
-    columns = {
-        item["name"] for item in inspect(engine).get_columns("source_records")
-    }
-    additions = {
-        "url_fragment": "TEXT",
-        "content_type": "VARCHAR(255)",
-        "extraction_version": "VARCHAR(64)",
-        "published_at": "DATETIME",
-        "source_updated_at": "DATETIME",
-        "source_type_reason": "TEXT",
-    }
+    existing = {item["name"] for item in inspect(engine).get_columns(table)}
     with engine.begin() as connection:
-        for name, column_type in additions.items():
-            if name not in columns:
+        for name, definition in additions.items():
+            if name not in existing:
                 connection.execute(
-                    text(
-                        f"ALTER TABLE source_records ADD COLUMN {name} {column_type}"
-                    )
+                    text(f"ALTER TABLE {table} ADD COLUMN {name} {definition}")
                 )
+
+
+def _apply_source_metadata_migration(engine: Engine) -> None:
+    _add_missing_columns(
+        engine,
+        "source_records",
+        {
+            "url_fragment": "TEXT",
+            "content_type": "VARCHAR(255)",
+            "extraction_version": "VARCHAR(64)",
+            "published_at": "DATETIME",
+            "source_updated_at": "DATETIME",
+            "source_type_reason": "TEXT",
+        },
+    )
 
 
 def _apply_report_review_migration(engine: Engine) -> None:
-    if engine.dialect.name != "sqlite":
-        return
-    columns = {item["name"] for item in inspect(engine).get_columns("reviews")}
-    if "report_section_results" not in columns:
-        with engine.begin() as connection:
-            connection.execute(
-                text(
-                    "ALTER TABLE reviews ADD COLUMN "
-                    "report_section_results JSON NOT NULL DEFAULT '[]'"
-                )
-            )
+    _add_missing_columns(
+        engine,
+        "reviews",
+        {"report_section_results": "JSON NOT NULL DEFAULT '[]'"},
+    )
 
 
 def _apply_gap_request_migration(engine: Engine) -> None:
-    if engine.dialect.name != "sqlite":
-        return
-    columns = {item["name"] for item in inspect(engine).get_columns("reviews")}
-    if "gap_requests" not in columns:
-        with engine.begin() as connection:
-            connection.execute(
-                text(
-                    "ALTER TABLE reviews ADD COLUMN "
-                    "gap_requests JSON NOT NULL DEFAULT '[]'"
-                )
-            )
+    _add_missing_columns(
+        engine, "reviews", {"gap_requests": "JSON NOT NULL DEFAULT '[]'"}
+    )
 
 
 def _apply_resume_migration(engine: Engine) -> None:
     """Add persistent run leases and conservative token reservations."""
 
-    if engine.dialect.name != "sqlite":
-        return
-    task_columns = {
-        item["name"] for item in inspect(engine).get_columns("research_tasks")
-    }
-    attempt_columns = {
-        item["name"] for item in inspect(engine).get_columns("call_attempts")
-    }
-    with engine.begin() as connection:
-        if "run_owner" not in task_columns:
-            connection.execute(
-                text("ALTER TABLE research_tasks ADD COLUMN run_owner VARCHAR(128)")
-            )
-        if "lease_expires_at" not in task_columns:
-            connection.execute(
-                text("ALTER TABLE research_tasks ADD COLUMN lease_expires_at DATETIME")
-            )
-        if "run_attempt" not in task_columns:
-            connection.execute(
-                text(
-                    "ALTER TABLE research_tasks ADD COLUMN "
-                    "run_attempt INTEGER NOT NULL DEFAULT 0"
-                )
-            )
-        if "reserved_prompt_tokens" not in attempt_columns:
-            connection.execute(
-                text(
-                    "ALTER TABLE call_attempts ADD COLUMN "
-                    "reserved_prompt_tokens INTEGER"
-                )
-            )
-        if "reserved_completion_tokens" not in attempt_columns:
-            connection.execute(
-                text(
-                    "ALTER TABLE call_attempts ADD COLUMN "
-                    "reserved_completion_tokens INTEGER"
-                )
-            )
-        if "budget_phase" not in attempt_columns:
-            connection.execute(
-                text(
-                    "ALTER TABLE call_attempts ADD COLUMN budget_phase VARCHAR(64)"
-                )
-            )
+    _add_missing_columns(
+        engine,
+        "research_tasks",
+        {
+            "run_owner": "VARCHAR(128)",
+            "lease_expires_at": "DATETIME",
+            "run_attempt": "INTEGER NOT NULL DEFAULT 0",
+        },
+    )
+    _add_missing_columns(
+        engine,
+        "call_attempts",
+        {
+            "reserved_prompt_tokens": "INTEGER",
+            "reserved_completion_tokens": "INTEGER",
+            "budget_phase": "VARCHAR(64)",
+        },
+    )
 
 
 def _apply_research_operation_migration(engine: Engine) -> None:
-    if engine.dialect.name != "sqlite":
-        return
-    columns = {
-        item["name"] for item in inspect(engine).get_columns("research_steps")
-    }
-    additions = {
-        "decision_id": "VARCHAR(128)",
-        "turn_index": "INTEGER NOT NULL DEFAULT 0",
-        "operation_index": "INTEGER NOT NULL DEFAULT 0",
-        "tool_name": "VARCHAR(64)",
-        "arguments": "JSON",
-        "operation_status": "VARCHAR(32) NOT NULL DEFAULT 'committed'",
-        "result_payload": "JSON",
-        "uncertainty_reason": "TEXT",
-        "updated_at": "DATETIME",
-    }
+    _add_missing_columns(
+        engine,
+        "research_steps",
+        {
+            "decision_id": "VARCHAR(128)",
+            "turn_index": "INTEGER NOT NULL DEFAULT 0",
+            "operation_index": "INTEGER NOT NULL DEFAULT 0",
+            "tool_name": "VARCHAR(64)",
+            "arguments": "JSON",
+            "operation_status": "VARCHAR(32) NOT NULL DEFAULT 'committed'",
+            "result_payload": "JSON",
+            "uncertainty_reason": "TEXT",
+            "updated_at": "DATETIME",
+        },
+    )
     with engine.begin() as connection:
-        for name, column_type in additions.items():
-            if name not in columns:
-                connection.execute(
-                    text(
-                        f"ALTER TABLE research_steps ADD COLUMN {name} {column_type}"
-                    )
-                )
         connection.execute(
             text(
                 "UPDATE research_steps SET updated_at = created_at "

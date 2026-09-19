@@ -82,10 +82,6 @@ class MaxRetryExceeded(WorkflowError):
     """操作耗尽允许的重试次数。"""
 
 
-class InvalidStateTransition(WorkflowError):
-    """工作流尝试执行状态机不允许的转换。"""
-
-
 class EvidenceValidationFailure(WorkflowError):
     """确定性校验后没有可接受证据。"""
 

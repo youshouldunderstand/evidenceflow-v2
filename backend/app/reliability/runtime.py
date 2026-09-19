@@ -308,7 +308,7 @@ class ExecutionRuntime:
                             "timeout_seconds": exc.timeout_seconds,
                         } if isinstance(exc, NetworkTimeoutError) else {}),
                         "retryable": retryable,
-                        "duration_ms": _duration_ms(started_at),
+                        "duration_ms": duration_ms(started_at),
                         "ended_at": datetime.now(timezone.utc).isoformat(),
                         **self._failed_usage_payload(kind),
                     },
@@ -329,7 +329,7 @@ class ExecutionRuntime:
             else:
                 completed_payload = {
                     **base_payload,
-                    "duration_ms": _duration_ms(started_at),
+                    "duration_ms": duration_ms(started_at),
                     "ended_at": datetime.now(timezone.utc).isoformat(),
                 }
                 if kind == "model":
@@ -556,5 +556,5 @@ def _arguments_hash(
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
-def _duration_ms(started_at: float) -> float:
+def duration_ms(started_at: float) -> float:
     return round((time.perf_counter() - started_at) * 1000, 3)

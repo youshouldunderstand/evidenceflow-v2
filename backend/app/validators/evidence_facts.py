@@ -141,38 +141,6 @@ def version_tokens(text: str) -> set[str]:
     return set(VERSION_PATTERN.findall(text or ""))
 
 
-def check_version_applicability(
-    version_scope: str, source_urls: list[str]
-) -> tuple[bool | None, str]:
-    """确定性检查：已保存来源 URL 是否命中题目要求的版本号。"""
-
-    target = version_tokens(version_scope)
-    if not target:
-        return None, "题目未指定版本号，无法自动判定"
-    hits = [url for url in source_urls if target & version_tokens(url)]
-    if hits:
-        return True, f"命中版本号 {sorted(target)} 的来源 {len(hits)} 条"
-    return False, f"来源 URL 均未包含目标版本号 {sorted(target)}，需人工核查适用性"
-
-
-def verify_span(span: str | None, haystacks: list[str]) -> bool | None:
-    """核验给出的原文引证是否真实存在。
-
-    返回 None 表示未给出引证（无法核验），False 表示引证无法定位
-    （按「编造依据」计入错误统计）。
-    """
-
-    if not span:
-        return None
-    needle = normalize_span(span)
-    if not needle:
-        return None
-    for haystack in haystacks:
-        if needle in normalize_span(haystack):
-            return True
-    return False
-
-
 def _normalized_with_map(text: str) -> tuple[str, list[int]]:
     """折叠空白，并保留「归一化位置 → 原始位置」的映射。"""
 

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Sequence
 from typing import Literal, Protocol, TypeVar, cast, runtime_checkable
 
 import httpx
@@ -271,48 +270,6 @@ class OpenAICompatibleStructuredLLM:
             )
         except (KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
             raise ParseError("GLM response did not contain a message") from exc
-
-
-class QueueStructuredLLM:
-    """按声明顺序返回结构化结果的测试 Fake。"""
-
-    def __init__(self, responses: Sequence[BaseModel]) -> None:
-        self._responses = list(responses)
-
-    async def generate(
-        self,
-        output_model: type[TModel],
-        *,
-        system_prompt: str,
-        user_prompt: str,
-    ) -> TModel:
-        del system_prompt, user_prompt
-        if not self._responses:
-            raise ProviderError("QueueStructuredLLM has no response remaining")
-        response = self._responses.pop(0)
-        if not isinstance(response, output_model):
-            raise ProviderError(
-                f"Expected {output_model.__name__}, got {type(response).__name__}"
-            )
-        return response
-
-    async def generate_with_usage(
-        self,
-        output_model: type[TModel],
-        *,
-        system_prompt: str,
-        user_prompt: str,
-    ) -> ModelResponse[TModel]:
-        message = await self.generate(
-            output_model,
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-        )
-        return ModelResponse(
-            message=message,
-            usage=ModelUsage.known_zero("deterministic queue fake"),
-            model="queue-fake",
-        )
 
 
 class DemoStructuredLLM:

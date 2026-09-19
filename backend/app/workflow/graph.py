@@ -21,7 +21,12 @@ from app.reliability.exceptions import (
     EvidenceValidationFailure,
     ReviewValidationFailure,
 )
-from app.reliability.runtime import ExecutionRuntime, FailureInjector, RetryPolicy
+from app.reliability.runtime import (
+    ExecutionRuntime,
+    FailureInjector,
+    RetryPolicy,
+    duration_ms,
+)
 from app.schemas.common import TaskStatus
 from app.schemas.event import WorkflowEventType
 from app.schemas.progress import (
@@ -975,7 +980,7 @@ class EvidenceFlowWorkflow:
                     payload={
                         "node": node_name,
                         "error_type": type(exc).__name__,
-                        "duration_ms": _duration_ms(started_at),
+                        "duration_ms": duration_ms(started_at),
                     },
                 )
                 raise
@@ -985,7 +990,7 @@ class EvidenceFlowWorkflow:
                 stage=str(result.get("current_stage", state["current_stage"])),
                 payload={
                     "node": node_name,
-                    "duration_ms": _duration_ms(started_at),
+                    "duration_ms": duration_ms(started_at),
                 },
             )
             return result
@@ -1050,7 +1055,3 @@ class EvidenceFlowWorkflow:
             stage=state["current_stage"],
             payload={"call_kind": kind, "attempt": attempt, **payload},
         )
-
-
-def _duration_ms(started_at: float) -> float:
-    return round((time.perf_counter() - started_at) * 1000, 3)

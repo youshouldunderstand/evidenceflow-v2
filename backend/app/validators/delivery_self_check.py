@@ -122,7 +122,6 @@ def run_delivery_self_check(
     只检查**被报告实际引用**的证据：未被引用的证据不影响本次结论。
     """
 
-    source_by_id = {item.source_id: item for item in sources}
     cited_ids: list[str] = []
     for claim in report.claims:
         for evidence_id in claim.evidence_ids:
@@ -137,7 +136,6 @@ def run_delivery_self_check(
 
     findings: list[DeliveryFinding] = []
     for context in contexts:
-        source = source_by_id.get(context.source_id)
         if context.deprecated:
             findings.append(
                 DeliveryFinding(
